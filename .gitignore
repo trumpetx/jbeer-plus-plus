@@ -1,0 +1,5 @@
+.idea/
+*.iml
+beer.properties
+target/
+*.log
