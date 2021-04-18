@@ -1,5 +1,8 @@
 .idea/
 *.iml
 beer.properties
+test.properties
 target/
 *.log
+*.db
+dependency-reduced-pom.xml

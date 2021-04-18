@@ -3,6 +3,7 @@ package com.trumpetx.beer.commands;
 import com.trumpetx.beer.domain.DaoProvider;
 import com.trumpetx.beer.domain.Item;
 import com.trumpetx.beer.domain.MemberItem;
+import com.trumpetx.beer.domain.Server;
 import discord4j.common.util.Snowflake;
 import discord4j.core.event.domain.message.MessageCreateEvent;
 import discord4j.core.object.entity.Guild;
@@ -13,6 +14,7 @@ import reactor.core.publisher.Mono;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiConsumer;
 
 import static com.trumpetx.beer.TextProvider.getText;
 
@@ -22,8 +24,12 @@ class Percent extends AbstractCommand {
   }
 
   @Override
-  Mono<Message> handleItem(String command, MessageCreateEvent event, User sender, Item item) {
+  Mono<?> handleItem(String command, MessageCreateEvent event, Snowflake guildId, User sender, Item item) {
     Guild guild = event.getGuild().block();
+    if(guild == null){
+      log.error("Error {}.getGuild()", getClass().getSimpleName());
+      return Mono.empty();
+    }
     List<MemberItem> memberItems = daoProvider.memberItemDao.queryForByItem(item);
     if (memberItems.isEmpty()) {
       return sendMessage(event, getText("reply.none", item.getEmojiPlural()));
@@ -35,9 +41,18 @@ class Percent extends AbstractCommand {
       .peek(i -> total.addAndGet(i.getCount()))
       .sorted(Comparator.comparing(MemberItem::getCount).reversed())
       .limit(20)
-      .peek(memberItem -> sb.append(getText("top.member", guild.getMemberById(Snowflake.of(memberItem.getMember().getId())).block().getDisplayName(), getPercentString(memberItem, total.get()))))
+      .peek(memberItem -> sb.append(getText("top.member", displayNameOrMention(guild, memberItem), getPercentString(memberItem, total.get()))))
       .count();
-    return sendMessage(event, getText("top.header", topX, item.getEmojiPlural(), guild.getName()) + sb.toString());
+    Mono<?> message = sendMessage(event, getText("top.header", topX, item.getEmojiPlural(), guild.getName()) + sb.toString(), sentMessage -> {
+      Server server = daoProvider.serverDao.queryForSameId(item.getServer());
+      server.setLastPercentMessage(sentMessage.getId().asLong());
+      daoProvider.serverDao.update(server);
+    });
+    Long lastPercentMessage = item.getServer().getLastPercentMessage();
+    if(lastPercentMessage != null){
+      return deleteMessageOfChannel(event, lastPercentMessage).then(message);
+    }
+    return message;
   }
 
   private String getPercentString(MemberItem memberItem, long total) {

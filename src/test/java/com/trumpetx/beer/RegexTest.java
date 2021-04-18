@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class RegexTest {
   @ParameterizedTest
   @CsvSource({
+    "++,Beer++,Beer",
     "++,beer++,beer",
     "++,beer++ @SandyBeach,beer",
     "--,beer--,beer",

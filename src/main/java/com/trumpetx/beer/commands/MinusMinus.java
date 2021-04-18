@@ -1,41 +1,41 @@
 package com.trumpetx.beer.commands;
 
+import com.trumpetx.beer.GuildInitializer;
 import com.trumpetx.beer.domain.DaoProvider;
 import com.trumpetx.beer.domain.Item;
 import com.trumpetx.beer.domain.Member;
 import com.trumpetx.beer.domain.MemberItem;
+import discord4j.common.util.Snowflake;
 import discord4j.core.event.domain.message.MessageCreateEvent;
 import discord4j.core.object.entity.User;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
 
 import static com.trumpetx.beer.TextProvider.getText;
 
 class MinusMinus extends AbstractCommand {
-  MinusMinus(DaoProvider daoProvider) {
+  private final GuildInitializer guildInitializer;
+
+  MinusMinus(DaoProvider daoProvider, GuildInitializer guildInitializer) {
     super("--", daoProvider);
+    this.guildInitializer = guildInitializer;
   }
 
   @Override
-  Mono<?> handleItem(String command, MessageCreateEvent event, User sender, Item item) {
+  Mono<?> handleItem(String command, MessageCreateEvent event, Snowflake guildId, User sender, Item item) {
     List<User> userMentions = userMentions(event);
     if (!item.isSelfDecrement()) {
       userMentions.removeIf(u -> sender.getId().equals(u.getId()));
     }
     Member senderMember = toMember(sender);
     if (userMentions.isEmpty()) {
-      return sendMessage(event, getText("reply.--share", senderMember.toMention(), item.getEmoji()));
+      return sendMessage(event, getText("reply.--share", item.getEmoji(), senderMember.toMention()));
     }
-    AtomicLong count = new AtomicLong();
-    String toMembersString = toMembers(userMentions).peek(toMember -> {
-      MemberItem memberItem = daoProvider.memberItemDao.queryForByMemberAndItem(toMember, item);
-      daoProvider.memberItemDao.update(memberItem.decrementCount());
-      count.set(memberItem.getCount());
-    }).map(Member::toMention).collect(Collectors.joining(", "));
-    String optionalCount = userMentions.size() == 1 ? (" [ " + count + " ]") : "";
-    return sendMessage(event, getText("reply.--", senderMember.toMention(), item.getEmoji(), toMembersString) + optionalCount);
+    if (userMentions.stream().anyMatch(User::isBot)) {
+      return sendMessage(event, getText("reply.dontmess", item.getEmoji()));
+    }
+    String toMembersString = guildInitializer.toMembersString(userMentions, guildId, item, MemberItem::decrementCount);
+    return sendMessage(event, getText("reply.--", senderMember.toMention(), item.getEmoji(), toMembersString));
   }
 }

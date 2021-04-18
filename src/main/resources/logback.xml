@@ -7,7 +7,7 @@
   </appender>
 
   <appender name="FILE" class="ch.qos.logback.core.FileAppender">
-    <file>beer.log</file>
+    <file>${user.home}/jbeer.log</file>
     <append>true</append>
     <encoder>
       <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{35} - %msg%n</pattern>
@@ -15,10 +15,9 @@
   </appender>
 
   <logger name="com.trumpetx.beer" level="INFO" />
-  <logger name="ch.qos.logback" level="WARN" />
 
   <root level="WARN">
     <appender-ref ref="FILE" />
-    <appender-ref ref="STDOUT" />
+    <!--appender-ref ref="STDOUT" /-->
   </root>
 </configuration>

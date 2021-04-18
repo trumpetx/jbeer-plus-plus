@@ -9,6 +9,11 @@ import discord4j.core.event.domain.guild.GuildCreateEvent;
 import discord4j.core.event.domain.guild.GuildDeleteEvent;
 import discord4j.core.event.domain.message.MessageCreateEvent;
 import discord4j.core.object.entity.Guild;
+import discord4j.core.object.presence.Activity;
+import discord4j.core.object.presence.Presence;
+import discord4j.core.object.presence.Status;
+import discord4j.discordjson.json.ActivityUpdateRequest;
+import discord4j.discordjson.json.gateway.StatusUpdate;
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,22 +26,26 @@ import java.io.InputStream;
 import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 
 import static com.trumpetx.beer.LogConfigurer.setProgramLogging;
 import static org.apache.commons.lang3.StringUtils.isBlank;
+import static org.apache.commons.lang3.StringUtils.lowerCase;
 
 public class DiscordApp implements Runnable {
   private static final String PROP_FILE = "beer.properties";
   private static Logger LOG;
-  private final String token;
   private final List<Command> commands;
   private final GuildInitializer guildInitializer;
+  private final GatewayDiscordClient gateway;
+  private final AtomicLong guildCount = new AtomicLong();
 
   public DiscordApp(String token, DaoProvider daoProvider) {
-    this.token = token;
-    commands = new CommandFactory(daoProvider).getCommands();
+    gateway = DiscordClient.create(token).login().block();
+    Objects.requireNonNull(gateway, "The DiscordClientGateway could not login.");
     guildInitializer = new GuildInitializer(daoProvider);
+    commands = new CommandFactory(daoProvider, guildInitializer).getCommands();
   }
 
   public static void main(String[] args) {
@@ -73,21 +82,28 @@ public class DiscordApp implements Runnable {
     System.exit(exitCode);
   }
 
+  private void updateGuildCount(long guildCount) {
+    LOG.debug("Updating guild count to {}", guildCount);
+    gateway.updatePresence(Presence.online(Activity.playing("on " + guildCount + " servers"))).subscribe();
+  }
+
   @Override
   public void run() {
-    DiscordClient client = DiscordClient.create(token);
-    GatewayDiscordClient gateway = client.login().block();
-    Objects.requireNonNull(gateway, "The DiscordClientGateway could not login.");
-    gateway.getGuilds().subscribe(guildInitializer);
+    gateway.getGuilds()
+      .count()
+      .subscribe(this::updateGuildCount);
+    gateway.getGuilds()
+      .flatMap(guildInitializer)
+      .subscribe();
     gateway.on(GuildCreateEvent.class)
       .map(GuildCreateEvent::getGuild)
-      .flatMap(guildInitializer)
+      .flatMap(guildInitializer::apply)
       .subscribe();
     gateway.on(GuildDeleteEvent.class)
       .map(GuildDeleteEvent::getGuild)
       .flatMap(g -> {
         LOG.info("{} has disconnected", g.map(Guild::getName).orElse("A deleted guild"));
-        return Mono.empty();
+        return Mono.empty(); //updateGuildCount(guildCount.decrementAndGet());
       })
       .subscribe();
     gateway
@@ -106,7 +122,7 @@ public class DiscordApp implements Runnable {
                   .filter(p -> p.getValue().matches())
                   .flatMap(entry -> {
                     try {
-                      String command = entry.getValue().group(1);
+                      String command = lowerCase(entry.getValue().group(1));
                       return entry.getKey().execute(command, event);
                     } catch (RuntimeException e) {
                       LOG.error("Error processing eventType: {}", entry.getClass(), e);
@@ -114,10 +130,12 @@ public class DiscordApp implements Runnable {
                     }
                   })
                   .next()))
+      .onErrorResume(e -> {
+        LOG.error("Unexpected error doing something: {}", e.getMessage());
+        return Mono.empty();
+      })
       .subscribe();
-    gateway.getApplicationInfo().subscribe(info -> {
-      LOG.info("Started: {}", info.getName());
-    });
+    gateway.getApplicationInfo().subscribe(info -> LOG.info("Started: {}", info.getName()));
     gateway.onDisconnect().block();
   }
 }

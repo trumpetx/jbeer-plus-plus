@@ -31,7 +31,7 @@ public class MemberItemDaoImpl extends RuntimeExceptionDao<MemberItem, Long> {
     query.put("item_id", item.getId());
     List<MemberItem> memberItems = queryForFieldValues(query);
     if (memberItems.isEmpty()) {
-      return createIfNotExists(new MemberItem(member, item, 0));
+      return null;
     }
     Iterator<MemberItem> it = memberItems.iterator();
     MemberItem memberItem = it.next();

@@ -14,6 +14,15 @@ public class Server {
   @DatabaseField(canBeNull = false)
   private String name;
 
+  @DatabaseField
+  private Long lastPercentMessage;
+
+  @DatabaseField
+  private Long lastCountMessage;
+
+  @DatabaseField
+  private Long lastHelpMessage;
+
   @ForeignCollectionField
   private ForeignCollection<Item> items;
 
@@ -47,6 +56,30 @@ public class Server {
 
   public void setName(String name) {
     this.name = name;
+  }
+
+  public Long getLastPercentMessage() {
+    return lastPercentMessage;
+  }
+
+  public void setLastPercentMessage(Long lastPercentMessage) {
+    this.lastPercentMessage = lastPercentMessage;
+  }
+
+  public Long getLastCountMessage() {
+    return lastCountMessage;
+  }
+
+  public void setLastCountMessage(Long lastCountMessage) {
+    this.lastCountMessage = lastCountMessage;
+  }
+
+  public Long getLastHelpMessage() {
+    return lastHelpMessage;
+  }
+
+  public void setLastHelpMessage(Long lastHelpMessage) {
+    this.lastHelpMessage = lastHelpMessage;
   }
 
   @Override
