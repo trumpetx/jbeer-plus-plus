@@ -24,7 +24,7 @@ class MinusMinus extends AbstractCommand {
 
   @Override
   Mono<?> handleItem(String command, MessageCreateEvent event, Snowflake guildId, User sender, Item item) {
-    List<User> userMentions = userMentions(event);
+    List<User> userMentions = event.getMessage().getUserMentions();
     if (!item.isSelfDecrement()) {
       userMentions.removeIf(u -> sender.getId().equals(u.getId()));
     }

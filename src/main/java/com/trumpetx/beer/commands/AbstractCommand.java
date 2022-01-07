@@ -38,22 +38,18 @@ abstract class AbstractCommand implements Command {
   @Override
   public Mono<?> execute(String command, MessageCreateEvent event) {
     return event.getMember().map(sender -> event
-      .getGuildId()
-      .map(Snowflake::asLong)
-      .map(daoProvider.serverDao::queryForId)
-      .map(Server::getItems)
-      .map(ForeignCollection::stream)
-      .flatMap(itemStream -> itemStream.filter(i -> i.getKeyword().equals(command)).findFirst())
-      .map(item -> {
-        log.debug("{} command received, sender={}, item={}", command, sender.getUsername(), item);
-        return handleItem(command, event, event.getGuildId().get(), sender, item);
-      })
-      .orElseGet(Mono::empty))
+        .getGuildId()
+        .map(Snowflake::asLong)
+        .map(daoProvider.serverDao::queryForId)
+        .map(Server::getItems)
+        .map(ForeignCollection::stream)
+        .flatMap(itemStream -> itemStream.filter(i -> i.getKeyword().equals(command)).findFirst())
+        .map(item -> {
+          log.debug("{} command received, sender={}, item={}", command, sender.getUsername(), item);
+          return handleItem(command, event, event.getGuildId().get(), sender, item);
+        })
+        .orElseGet(Mono::empty))
       .orElseGet(Mono::empty);
-  }
-
-  List<User> userMentions(MessageCreateEvent event) {
-    return ofNullable(event.getMessage().getUserMentions().collectList().block()).orElseGet(Collections::emptyList);
   }
 
   Member toMember(User users) {

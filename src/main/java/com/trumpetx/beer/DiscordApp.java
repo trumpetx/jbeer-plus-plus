@@ -9,11 +9,7 @@ import discord4j.core.event.domain.guild.GuildCreateEvent;
 import discord4j.core.event.domain.guild.GuildDeleteEvent;
 import discord4j.core.event.domain.message.MessageCreateEvent;
 import discord4j.core.object.entity.Guild;
-import discord4j.core.object.presence.Activity;
-import discord4j.core.object.presence.Presence;
-import discord4j.core.object.presence.Status;
-import discord4j.discordjson.json.ActivityUpdateRequest;
-import discord4j.discordjson.json.gateway.StatusUpdate;
+import discord4j.core.object.presence.*;
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,7 +22,6 @@ import java.io.InputStream;
 import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 
 import static com.trumpetx.beer.LogConfigurer.setProgramLogging;
@@ -39,10 +34,9 @@ public class DiscordApp implements Runnable {
   private final List<Command> commands;
   private final GuildInitializer guildInitializer;
   private final GatewayDiscordClient gateway;
-  private final AtomicLong guildCount = new AtomicLong();
 
   public DiscordApp(String token, DaoProvider daoProvider) {
-    gateway = DiscordClient.create(token).login().block();
+    gateway = DiscordClient.create(token).gateway().setInitialPresence(s -> ClientPresence.invisible()).login().block();
     Objects.requireNonNull(gateway, "The DiscordClientGateway could not login.");
     guildInitializer = new GuildInitializer(daoProvider);
     commands = new CommandFactory(daoProvider, guildInitializer).getCommands();
@@ -84,7 +78,7 @@ public class DiscordApp implements Runnable {
 
   private void updateGuildCount(long guildCount) {
     LOG.debug("Updating guild count to {}", guildCount);
-    gateway.updatePresence(Presence.online(Activity.playing("on " + guildCount + " servers"))).subscribe();
+    gateway.updatePresence(ClientPresence.online(ClientActivity.playing("on " + guildCount + " servers"))).subscribe();
   }
 
   @Override

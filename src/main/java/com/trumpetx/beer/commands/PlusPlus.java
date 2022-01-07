@@ -29,7 +29,7 @@ class PlusPlus extends AbstractCommand {
   @Override
   Mono<?> handleItem(String command, MessageCreateEvent event, Snowflake guildId, User sender, Item item) {
     log.debug("{} command received, sender={}, item={}", command, sender.getUsername(), item);
-    List<User> userMentions = userMentions(event);
+    List<User> userMentions = event.getMessage().getUserMentions();
     if (!item.isSelfIncrement()) {
       if (userMentions.removeIf(u -> sender.getId().equals(u.getId())) && userMentions.isEmpty()) {
         return sendMessage(event, getText("reply.greedy", sender.getMention(), item.getEmoji()));
