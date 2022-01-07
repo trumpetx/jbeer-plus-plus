@@ -7,6 +7,7 @@ import discord4j.core.event.domain.message.MessageCreateEvent;
 import discord4j.core.object.entity.Guild;
 import discord4j.core.object.entity.Message;
 import discord4j.core.object.entity.User;
+import discord4j.rest.http.client.ClientException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -57,9 +58,14 @@ abstract class AbstractCommand implements Command {
   }
 
   String displayNameOrMention(Guild guild, MemberItem memberItem) {
-    return ofNullable(guild.getMemberById(Snowflake.of(memberItem.getMember().getId())).block())
-      .map(discord4j.core.object.entity.Member::getDisplayName)
-      .orElseGet(memberItem.getMember()::toMention);
+    try{
+      return ofNullable(guild.getMemberById(Snowflake.of(memberItem.getMember().getId())).block())
+        .map(discord4j.core.object.entity.Member::getDisplayName)
+        .orElseGet(memberItem.getMember()::toMention);
+    } catch (ClientException e) {
+      log.warn("Error looking up {}/{} : {}", guild.getName(), memberItem.getMember().getId(), e.getMessage());
+      return "Deleted User";
+    }
   }
 
   Mono<?> deleteMessageOfChannel(MessageCreateEvent event, long messageId) {
