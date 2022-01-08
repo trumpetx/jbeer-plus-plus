@@ -58,14 +58,15 @@ abstract class AbstractCommand implements Command {
   }
 
   String displayNameOrMention(Guild guild, MemberItem memberItem) {
+    discord4j.core.object.entity.Member member = null;
     try{
-      return ofNullable(guild.getMemberById(Snowflake.of(memberItem.getMember().getId())).block())
-        .map(discord4j.core.object.entity.Member::getDisplayName)
-        .orElseGet(memberItem.getMember()::toMention);
+       member = guild.getMemberById(Snowflake.of(memberItem.getMember().getId())).block();
     } catch (ClientException e) {
-      log.warn("Error looking up {}/{} : {}", guild.getName(), memberItem.getMember().getId(), e.getMessage());
-      return "Deleted User";
+      log.debug("Error looking up {}/{} : {}", guild.getName(), memberItem.getMember().getId(), e.getMessage());
     }
+    return ofNullable(member)
+      .map(discord4j.core.object.entity.Member::getDisplayName)
+      .orElseGet(memberItem.getMember()::toMention);
   }
 
   Mono<?> deleteMessageOfChannel(MessageCreateEvent event, long messageId) {
