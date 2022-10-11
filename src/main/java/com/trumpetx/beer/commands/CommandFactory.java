@@ -5,21 +5,25 @@ import com.trumpetx.beer.domain.DaoProvider;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class CommandFactory {
-  private final List<Command> commands;
+  private final Map<String, Command> commands;
 
   public CommandFactory(DaoProvider daoProvider, GuildInitializer guildInitializer) {
-    commands = Arrays.asList(
+    commands = Stream.of(
       new PlusPlus(daoProvider, guildInitializer),
       new MinusMinus(daoProvider, guildInitializer),
       new Count(daoProvider),
       new Percent(daoProvider),
       new Help(daoProvider)
-    );
+    ).collect(Collectors.toMap(Command::keyword, Function.identity()));
   }
 
-  public List<Command> getCommands() {
+  public Map<String, Command> getCommands() {
     return commands;
   }
 }

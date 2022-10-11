@@ -1,31 +1,31 @@
 package com.trumpetx.beer.commands;
 
 import com.j256.ormlite.dao.ForeignCollection;
-import com.trumpetx.beer.domain.*;
+import com.trumpetx.beer.domain.DaoProvider;
+import com.trumpetx.beer.domain.Item;
+import com.trumpetx.beer.domain.MemberItem;
+import com.trumpetx.beer.domain.Server;
 import discord4j.common.util.Snowflake;
-import discord4j.core.event.domain.message.MessageCreateEvent;
+import discord4j.core.event.domain.interaction.ChatInputInteractionEvent;
 import discord4j.core.object.entity.Guild;
-import discord4j.core.object.entity.Message;
-import discord4j.core.object.entity.User;
+import discord4j.core.spec.InteractionApplicationCommandCallbackReplyMono;
 import discord4j.rest.http.client.ClientException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import reactor.core.publisher.Mono;
 
-import java.time.Duration;
-import java.util.Collections;
-import java.util.List;
-import java.util.function.Consumer;
+import java.util.Optional;
 
 import static java.util.Optional.ofNullable;
 
 abstract class AbstractCommand implements Command {
   final String keyword;
+  final String description;
   final DaoProvider daoProvider;
   final Logger log = LoggerFactory.getLogger(getClass());
 
-  AbstractCommand(String keyword, DaoProvider daoProvider) {
+  AbstractCommand(String keyword, String description, DaoProvider daoProvider) {
     this.keyword = keyword;
+    this.description = description;
     this.daoProvider = daoProvider;
   }
 
@@ -34,27 +34,35 @@ abstract class AbstractCommand implements Command {
     return keyword;
   }
 
-  abstract Mono<?> handleItem(String command, MessageCreateEvent event, Snowflake guildId, User sender, Item item);
-
   @Override
-  public Mono<?> execute(String command, MessageCreateEvent event) {
-    return event.getMember().map(sender -> event
-        .getGuildId()
-        .map(Snowflake::asLong)
-        .map(daoProvider.serverDao::queryForId)
-        .map(Server::getItems)
-        .map(ForeignCollection::stream)
-        .flatMap(itemStream -> itemStream.filter(i -> i.getKeyword().equals(command)).findFirst())
-        .map(item -> {
-          log.debug("{} command received, sender={}, item={}", command, sender.getUsername(), item);
-          return handleItem(command, event, event.getGuildId().get(), sender, item);
-        })
-        .orElseGet(Mono::empty))
-      .orElseGet(Mono::empty);
+  public String description() {
+    return description;
   }
 
-  Member toMember(User users) {
-    return daoProvider.memberDao.createIfNotExists(new Member(users.getId().asLong()));
+  abstract InteractionApplicationCommandCallbackReplyMono handleItem(ChatInputInteractionEvent event, Snowflake guildId, discord4j.core.object.entity.Member sender, Item item);
+
+  @Override
+  public InteractionApplicationCommandCallbackReplyMono execute(ChatInputInteractionEvent event) {
+    Optional<Snowflake> guildId = event.getInteraction().getGuildId();
+    Optional<discord4j.core.object.entity.Member> sender = event.getInteraction().getMember();
+    String onlyBeerIsSupportedForNow = "beer";
+    return sender.map(member -> guildId
+      .map(Snowflake::asLong)
+      .map(daoProvider.serverDao::queryForId)
+      .map(Server::getItems)
+      .map(ForeignCollection::stream)
+      .flatMap(itemStream -> itemStream.filter(i -> i.getKeyword().equals(onlyBeerIsSupportedForNow)).findFirst())
+      .map(item -> {
+        log.debug("{} command received, sender={}, item={}", keyword(), member.getUsername(), item);
+        return handleItem(event, guildId.get(), member, item);
+      }).orElseGet(() -> invalid(event)))
+      .orElseGet(() -> invalid(event));
+  }
+
+  private InteractionApplicationCommandCallbackReplyMono invalid(ChatInputInteractionEvent event) {
+    return event
+      .reply("An error occurred processing the command: " + event.getCommandName( ))
+      .withEphemeral(true);
   }
 
   String displayNameOrMention(Guild guild, MemberItem memberItem) {
@@ -67,46 +75,5 @@ abstract class AbstractCommand implements Command {
     return ofNullable(member)
       .map(discord4j.core.object.entity.Member::getDisplayName)
       .orElseGet(memberItem.getMember()::toMention);
-  }
-
-  Mono<?> deleteMessageOfChannel(MessageCreateEvent event, long messageId) {
-    log.debug("Attempting to delete messageId={}", messageId);
-    return event.getMessage().getChannel()
-      .flatMap(channel -> channel.getMessageById(Snowflake.of(messageId)))
-      .onErrorResume(e -> {
-        log.warn("Error getting message from channel: {}/{}, {}", event.getMessage().getChannelId().asLong(), messageId, e.getMessage());
-        return Mono.empty();
-      })
-      .flatMap(msg -> msg.delete().delaySubscription(Duration.ofSeconds(1)))
-      .onErrorResume(e -> {
-        log.warn("Error deleting message: {}, {}", messageId, e.getMessage());
-        return Mono.empty();
-      });
-  }
-
-  Mono<?> sendMessage(MessageCreateEvent event, String msg) {
-    return sendMessage(event, msg, empty -> {
-    });
-  }
-
-  Mono<?> sendMessage(MessageCreateEvent event, String msg, Consumer<Message> messageCallback) {
-    log.debug("Sending Message: {}", msg);
-    return event
-      .getMessage()
-      .getChannel()
-      .flatMap(c -> c.createMessage(msg)
-        .onErrorResume(e -> {
-          log.error("Error creating message: {}", msg);
-          return Mono.empty();
-        })
-        .map(message -> {
-          messageCallback.accept(message);
-          return message;
-        })
-      )
-      .then(event.getMessage().delete().delaySubscription(Duration.ofSeconds(1)).onErrorResume(e -> {
-        log.warn("Error deleting beer++ message from channel: {}, {}", event.getMessage().getChannelId().asLong(), e.getMessage());
-        return Mono.empty();
-      }));
   }
 }

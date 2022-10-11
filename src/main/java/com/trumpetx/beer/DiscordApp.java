@@ -7,33 +7,36 @@ import discord4j.core.DiscordClient;
 import discord4j.core.GatewayDiscordClient;
 import discord4j.core.event.domain.guild.GuildCreateEvent;
 import discord4j.core.event.domain.guild.GuildDeleteEvent;
-import discord4j.core.event.domain.message.MessageCreateEvent;
+import discord4j.core.event.domain.interaction.ChatInputInteractionEvent;
 import discord4j.core.object.entity.Guild;
-import discord4j.core.object.presence.*;
-import org.apache.commons.lang3.tuple.Pair;
+import discord4j.core.object.presence.ClientPresence;
+import discord4j.discordjson.json.ApplicationCommandRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
-import java.util.regex.Matcher;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static com.trumpetx.beer.LogConfigurer.setProgramLogging;
 import static org.apache.commons.lang3.StringUtils.isBlank;
-import static org.apache.commons.lang3.StringUtils.lowerCase;
 
 public class DiscordApp implements Runnable {
   private static final String PROP_FILE = "beer.properties";
   private static Logger LOG;
-  private final List<Command> commands;
+  private final Map<String, Command> commands;
   private final GuildInitializer guildInitializer;
   private final GatewayDiscordClient gateway;
+
+  private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 
   public DiscordApp(String token, DaoProvider daoProvider) {
     gateway = DiscordClient.create(token).gateway().setInitialPresence(s -> ClientPresence.invisible()).login().block();
@@ -76,16 +79,9 @@ public class DiscordApp implements Runnable {
     System.exit(exitCode);
   }
 
-  private void updateGuildCount(long guildCount) {
-    LOG.debug("Updating guild count to {}", guildCount);
-    gateway.updatePresence(ClientPresence.online(ClientActivity.playing("on " + guildCount + " servers"))).subscribe();
-  }
-
   @Override
   public void run() {
-    gateway.getGuilds()
-      .count()
-      .subscribe(this::updateGuildCount);
+    executor.scheduleWithFixedDelay(new StatusUpdater(gateway), 10, 900, TimeUnit.SECONDS);
     gateway.getGuilds()
       .flatMap(guildInitializer)
       .subscribe();
@@ -97,39 +93,44 @@ public class DiscordApp implements Runnable {
       .map(GuildDeleteEvent::getGuild)
       .flatMap(g -> {
         LOG.info("{} has disconnected", g.map(Guild::getName).orElse("A deleted guild"));
-        return Mono.empty(); //updateGuildCount(guildCount.decrementAndGet());
+        return Mono.empty();
       })
       .subscribe();
     gateway
       .getEventDispatcher()
-      .on(MessageCreateEvent.class)
-      .flatMap(
-        event ->
-          Mono.just(event.getMessage().getContent())
-            .flatMap(
-              content ->
-                Flux.fromIterable(commands)
-                  .map(entry -> {
-                    Matcher m = Regex.command(entry.keyword()).matcher(event.getMessage().getContent());
-                    return Pair.of(entry, m);
-                  })
-                  .filter(p -> p.getValue().matches())
-                  .flatMap(entry -> {
-                    try {
-                      String command = lowerCase(entry.getValue().group(1));
-                      return entry.getKey().execute(command, event);
-                    } catch (RuntimeException e) {
-                      LOG.error("Error processing eventType: {}", entry.getClass(), e);
-                      return Mono.empty();
-                    }
-                  })
-                  .next()))
+      .on(ChatInputInteractionEvent.class, event -> {
+        String commandName = event.getCommandName();
+        if (commandName.length() > 4) {
+          commandName = commandName.substring(4);
+        }
+        Command command = commands.get(commandName);
+        if (command == null) {
+          return event
+            .reply("The command " + event.getCommandName() + " is invalid")
+            .withEphemeral(true);
+        }
+        return command.execute(event);
+      })
       .onErrorResume(e -> {
         LOG.error("Unexpected error doing something: {}", e.getMessage());
         return Mono.empty();
       })
       .subscribe();
     gateway.getApplicationInfo().subscribe(info -> LOG.info("Started: {}", info.getName()));
+    gateway.getRestClient().getApplicationId().subscribe(applicationId ->
+      gateway.getRestClient()
+        .getApplicationService()
+        .bulkOverwriteGlobalApplicationCommand(applicationId, commands.values().stream()
+          .map(command -> ApplicationCommandRequest.builder()
+            .name("beer" + command.keyword())
+            .description(command.description())
+            .options(command.options())
+            .build()
+          )
+          .peek(cmd -> LOG.info("{} registered", cmd.name()))
+          .collect(Collectors.toList()))
+        .onErrorStop()
+        .subscribe());
     gateway.onDisconnect().block();
   }
 }

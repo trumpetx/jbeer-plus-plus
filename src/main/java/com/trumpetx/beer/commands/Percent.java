@@ -3,36 +3,33 @@ package com.trumpetx.beer.commands;
 import com.trumpetx.beer.domain.DaoProvider;
 import com.trumpetx.beer.domain.Item;
 import com.trumpetx.beer.domain.MemberItem;
-import com.trumpetx.beer.domain.Server;
 import discord4j.common.util.Snowflake;
-import discord4j.core.event.domain.message.MessageCreateEvent;
+import discord4j.core.event.domain.interaction.ChatInputInteractionEvent;
 import discord4j.core.object.entity.Guild;
-import discord4j.core.object.entity.Message;
-import discord4j.core.object.entity.User;
-import reactor.core.publisher.Mono;
+import discord4j.core.spec.InteractionApplicationCommandCallbackReplyMono;
 
+import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.BiConsumer;
 
 import static com.trumpetx.beer.TextProvider.getText;
 
 class Percent extends AbstractCommand {
   Percent(DaoProvider daoProvider) {
-    super("%%", daoProvider);
+    super("percent", "Who has how much beer", daoProvider);
   }
 
   @Override
-  Mono<?> handleItem(String command, MessageCreateEvent event, Snowflake guildId, User sender, Item item) {
-    Guild guild = event.getGuild().block();
+  InteractionApplicationCommandCallbackReplyMono handleItem(ChatInputInteractionEvent event, Snowflake guildId, discord4j.core.object.entity.Member sender, Item item) {
+    Guild guild = sender.getGuild().block(Duration.ofSeconds(10));
     if(guild == null){
       log.error("Error {}.getGuild()", getClass().getSimpleName());
-      return Mono.empty();
+      return event.reply();
     }
     List<MemberItem> memberItems = daoProvider.memberItemDao.queryForByItem(item);
     if (memberItems.isEmpty()) {
-      return sendMessage(event, getText("reply.none", item.getEmojiPlural()));
+      return event.reply(getText("reply.none", item.getEmojiPlural()));
     }
     StringBuilder sb = new StringBuilder();
     AtomicLong total = new AtomicLong();
@@ -43,16 +40,11 @@ class Percent extends AbstractCommand {
       .limit(20)
       .peek(memberItem -> sb.append(getText("top.member", displayNameOrMention(guild, memberItem), getPercentString(memberItem, total.get()))))
       .count();
-    Mono<?> message = sendMessage(event, getText("top.header", topX, item.getEmojiPlural(), guild.getName()) + sb.toString(), sentMessage -> {
-      Server server = daoProvider.serverDao.queryForSameId(item.getServer());
-      server.setLastPercentMessage(sentMessage.getId().asLong());
-      daoProvider.serverDao.update(server);
-    });
-    Long lastPercentMessage = item.getServer().getLastPercentMessage();
-    if(lastPercentMessage != null){
-      return deleteMessageOfChannel(event, lastPercentMessage).then(message);
+    String reply = getText("top.header", topX, item.getEmojiPlural(), guild.getName()) + sb;
+    if(reply.length() > 2000) {
+      reply = reply.substring(0, 1900) + "\n\nReply too long, truncating (will fix this later).";
     }
-    return message;
+    return event.reply(reply);
   }
 
   private String getPercentString(MemberItem memberItem, long total) {

@@ -2,36 +2,25 @@ package com.trumpetx.beer.commands;
 
 import com.trumpetx.beer.domain.DaoProvider;
 import com.trumpetx.beer.domain.Item;
-import com.trumpetx.beer.domain.Server;
 import discord4j.common.util.Snowflake;
-import discord4j.core.event.domain.message.MessageCreateEvent;
-import discord4j.core.object.entity.User;
-import reactor.core.publisher.Mono;
+import discord4j.core.event.domain.interaction.ChatInputInteractionEvent;
+import discord4j.core.spec.InteractionApplicationCommandCallbackReplyMono;
 
 public class Help extends AbstractCommand {
   Help(DaoProvider daoProvider) {
-    super("??", daoProvider);
+    super("about", "About this bot", daoProvider);
   }
 
   @Override
-  Mono<?> handleItem(String command, MessageCreateEvent event, Snowflake guildId, User sender, Item item) {
-    Mono<?> helpMessage = sendMessage(event, "How to Beer-Plus-Plus:```" +
-      "beer++ @Someone @SomeoneElse\tGive beer to someone!\n" +
-      "beer-- @Someone @SomeoneElse\tTake beer from someone!\n" +
-      "beer##                      \tWho has how many beers\n" +
-      "beer%%                      \tWho has how much beer\n" +
-      "beer??                      \tThis message\n" +
+  InteractionApplicationCommandCallbackReplyMono handleItem(ChatInputInteractionEvent event, Snowflake guildId, discord4j.core.object.entity.Member sender, Item item) {
+    return event.reply("How to Beer-Plus-Plus:```" +
+      "/beerplusplus @Someone\n" +
+      "/beerminusminus @Someone\n" +
+      "/beercount\n" +
+      "/beerpercent\n" +
+      "/beerabout\n" +
       "```\n" +
-      "Beer++ is undergoing some changes - it's been entirely rewritten March 1, 2021 - new features coming soon: CUSTOMIZED items!\n" +
-      "Feedback: <https://discordbots.org/bot/405811389748346881>", sentMessage -> {
-      Server server = daoProvider.serverDao.queryForSameId(item.getServer());
-      server.setLastHelpMessage(sentMessage.getId().asLong());
-      daoProvider.serverDao.update(server);
-    });
-    Long lastHelpMessage = item.getServer().getLastHelpMessage();
-    if (lastHelpMessage != null) {
-      return deleteMessageOfChannel(event, lastHelpMessage).then(helpMessage);
-    }
-    return helpMessage;
+      "Beer++ has been rewritten with slash commands!!  Some behaviors have changed, but the gist should remain the same.  Enjoy :beers:!\n" +
+      "Feedback: <https://discordbots.org/bot/405811389748346881>");
   }
 }
