@@ -17,17 +17,17 @@ public class StatusUpdater implements Runnable {
   @Override
   public void run() {
     try {
-      gateway.getGuilds()
-        .count()
-        .subscribe(this::updateGuildCount)
-        .dispose();
-    } catch (Exception e){
+      gateway.getGuilds().count().subscribe(this::updateGuildCount).dispose();
+    } catch (Exception e) {
       LOG.error("Unexpected error", e);
     }
   }
 
   private void updateGuildCount(long guildCount) {
     LOG.debug("Updating guild count to {}", guildCount);
-    gateway.updatePresence(ClientPresence.online(ClientActivity.playing("on " + guildCount + " servers"))).subscribe();
+    gateway
+        .updatePresence(
+            ClientPresence.online(ClientActivity.playing("on " + guildCount + " servers")))
+        .subscribe();
   }
 }

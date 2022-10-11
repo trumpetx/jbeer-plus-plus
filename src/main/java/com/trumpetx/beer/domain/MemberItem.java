@@ -17,8 +17,7 @@ public class MemberItem {
   @DatabaseField(canBeNull = false, defaultValue = "0")
   private long count;
 
-  public MemberItem() {
-  }
+  public MemberItem() {}
 
   public MemberItem(Member member, Item item, long count) {
     this.member = member;

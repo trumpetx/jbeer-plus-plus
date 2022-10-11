@@ -10,11 +10,9 @@ public class Member {
   @DatabaseField(canBeNull = false, id = true)
   private long id;
 
-  @ForeignCollectionField
-  private ForeignCollection<MemberItem> memberItems;
+  @ForeignCollectionField private ForeignCollection<MemberItem> memberItems;
 
-  public Member() {
-  }
+  public Member() {}
 
   public Member(long id) {
     this.id = id;

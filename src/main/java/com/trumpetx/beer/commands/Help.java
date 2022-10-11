@@ -12,15 +12,20 @@ public class Help extends AbstractCommand {
   }
 
   @Override
-  InteractionApplicationCommandCallbackReplyMono handleItem(ChatInputInteractionEvent event, Snowflake guildId, discord4j.core.object.entity.Member sender, Item item) {
-    return event.reply("How to Beer-Plus-Plus:```" +
-      "/beerplusplus @Someone\n" +
-      "/beerminusminus @Someone\n" +
-      "/beercount\n" +
-      "/beerpercent\n" +
-      "/beerabout\n" +
-      "```\n" +
-      "Beer++ has been rewritten with slash commands!!  Some behaviors have changed, but the gist should remain the same.  Enjoy :beers:!\n" +
-      "Feedback: <https://discordbots.org/bot/405811389748346881>");
+  InteractionApplicationCommandCallbackReplyMono handleItem(
+      ChatInputInteractionEvent event,
+      Snowflake guildId,
+      discord4j.core.object.entity.Member sender,
+      Item item) {
+    return event.reply(
+        "How to Beer-Plus-Plus:```"
+            + "/beerplusplus @Someone\n"
+            + "/beerminusminus @Someone\n"
+            + "/beercount\n"
+            + "/beerpercent\n"
+            + "/beerabout\n"
+            + "```\n"
+            + "Beer++ has been rewritten with slash commands!!  Some behaviors have changed, but the gist should remain the same.  Enjoy :beers:!\n"
+            + "Feedback: <https://discordbots.org/bot/405811389748346881>");
   }
 }

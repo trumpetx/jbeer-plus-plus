@@ -7,8 +7,7 @@ import java.util.regex.Pattern;
 class Regex {
   private static final Map<String, Pattern> PATTERN_CACHE = new HashMap<>();
 
-  private Regex() {
-  }
+  private Regex() {}
 
   private static Pattern generateCommandPattern(String command) {
     return Pattern.compile("(\\w+)" + Pattern.quote(command) + ".*");

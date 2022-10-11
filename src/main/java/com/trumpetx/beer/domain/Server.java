@@ -14,20 +14,15 @@ public class Server {
   @DatabaseField(canBeNull = false)
   private String name;
 
-  @DatabaseField
-  private Long lastPercentMessage;
+  @DatabaseField private Long lastPercentMessage;
 
-  @DatabaseField
-  private Long lastCountMessage;
+  @DatabaseField private Long lastCountMessage;
 
-  @DatabaseField
-  private Long lastHelpMessage;
+  @DatabaseField private Long lastHelpMessage;
 
-  @ForeignCollectionField
-  private ForeignCollection<Item> items;
+  @ForeignCollectionField private ForeignCollection<Item> items;
 
-  public Server() {
-  }
+  public Server() {}
 
   public Server(long id, String name) {
     this.id = id;
@@ -84,9 +79,6 @@ public class Server {
 
   @Override
   public String toString() {
-    return new ToStringBuilder(this)
-      .append("id", id)
-      .append("name", name)
-      .toString();
+    return new ToStringBuilder(this).append("id", id).append("name", name).toString();
   }
 }

@@ -1,5 +1,7 @@
 package com.trumpetx.beer.commands;
 
+import static java.util.Optional.ofNullable;
+
 import com.j256.ormlite.dao.ForeignCollection;
 import com.trumpetx.beer.domain.DaoProvider;
 import com.trumpetx.beer.domain.Item;
@@ -10,12 +12,9 @@ import discord4j.core.event.domain.interaction.ChatInputInteractionEvent;
 import discord4j.core.object.entity.Guild;
 import discord4j.core.spec.InteractionApplicationCommandCallbackReplyMono;
 import discord4j.rest.http.client.ClientException;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.Optional;
-
-import static java.util.Optional.ofNullable;
 
 abstract class AbstractCommand implements Command {
   final String keyword;
@@ -39,41 +38,62 @@ abstract class AbstractCommand implements Command {
     return description;
   }
 
-  abstract InteractionApplicationCommandCallbackReplyMono handleItem(ChatInputInteractionEvent event, Snowflake guildId, discord4j.core.object.entity.Member sender, Item item);
+  abstract InteractionApplicationCommandCallbackReplyMono handleItem(
+      ChatInputInteractionEvent event,
+      Snowflake guildId,
+      discord4j.core.object.entity.Member sender,
+      Item item);
 
   @Override
   public InteractionApplicationCommandCallbackReplyMono execute(ChatInputInteractionEvent event) {
     Optional<Snowflake> guildId = event.getInteraction().getGuildId();
     Optional<discord4j.core.object.entity.Member> sender = event.getInteraction().getMember();
     String onlyBeerIsSupportedForNow = "beer";
-    return sender.map(member -> guildId
-      .map(Snowflake::asLong)
-      .map(daoProvider.serverDao::queryForId)
-      .map(Server::getItems)
-      .map(ForeignCollection::stream)
-      .flatMap(itemStream -> itemStream.filter(i -> i.getKeyword().equals(onlyBeerIsSupportedForNow)).findFirst())
-      .map(item -> {
-        log.debug("{} command received, sender={}, item={}", keyword(), member.getUsername(), item);
-        return handleItem(event, guildId.get(), member, item);
-      }).orElseGet(() -> invalid(event)))
-      .orElseGet(() -> invalid(event));
+    return sender
+        .map(
+            member ->
+                guildId
+                    .map(Snowflake::asLong)
+                    .map(daoProvider.serverDao::queryForId)
+                    .map(Server::getItems)
+                    .map(ForeignCollection::stream)
+                    .flatMap(
+                        itemStream ->
+                            itemStream
+                                .filter(i -> i.getKeyword().equals(onlyBeerIsSupportedForNow))
+                                .findFirst())
+                    .map(
+                        item -> {
+                          log.debug(
+                              "{} command received, sender={}, item={}",
+                              keyword(),
+                              member.getUsername(),
+                              item);
+                          return handleItem(event, guildId.get(), member, item);
+                        })
+                    .orElseGet(() -> invalid(event)))
+        .orElseGet(() -> invalid(event));
   }
 
   private InteractionApplicationCommandCallbackReplyMono invalid(ChatInputInteractionEvent event) {
     return event
-      .reply("An error occurred processing the command: " + event.getCommandName( ))
-      .withEphemeral(true);
+        .reply("An error occurred processing the command: " + event.getCommandName())
+        .withEphemeral(true);
   }
 
   String displayNameOrMention(Guild guild, MemberItem memberItem) {
     discord4j.core.object.entity.Member member = null;
-    try{
-       member = guild.getMemberById(Snowflake.of(memberItem.getMember().getId())).block();
+    try {
+      member = guild.getMemberById(Snowflake.of(memberItem.getMember().getId())).block();
     } catch (ClientException e) {
-      log.debug("Error looking up {}/{} : {}", guild.getName(), memberItem.getMember().getId(), e.getMessage());
+      log.debug(
+          "Error looking up {}/{} : {}",
+          guild.getName(),
+          memberItem.getMember().getId(),
+          e.getMessage());
     }
     return ofNullable(member)
-      .map(discord4j.core.object.entity.Member::getDisplayName)
-      .orElseGet(memberItem.getMember()::toMention);
+        .map(discord4j.core.object.entity.Member::getDisplayName)
+        .orElseGet(memberItem.getMember()::toMention);
   }
 }

@@ -1,5 +1,7 @@
 package com.trumpetx.beer.commands;
 
+import static com.trumpetx.beer.TextProvider.getText;
+
 import com.trumpetx.beer.GuildInitializer;
 import com.trumpetx.beer.domain.DaoProvider;
 import com.trumpetx.beer.domain.Item;
@@ -12,12 +14,9 @@ import discord4j.core.object.entity.User;
 import discord4j.core.spec.InteractionApplicationCommandCallbackReplyMono;
 import discord4j.discordjson.json.ApplicationCommandOptionData;
 import discord4j.discordjson.possible.Possible;
-import reactor.core.publisher.Mono;
-
 import java.util.Collections;
 import java.util.List;
-
-import static com.trumpetx.beer.TextProvider.getText;
+import reactor.core.publisher.Mono;
 
 class PlusPlus extends AbstractCommand {
   private final GuildInitializer guildInitializer;
@@ -29,34 +28,50 @@ class PlusPlus extends AbstractCommand {
 
   @Override
   public Possible<List<ApplicationCommandOptionData>> options() {
-    return Possible.of(Collections.singletonList(
-      ApplicationCommandOptionData.builder()
-        .name("member")
-        .description("Who do you want give beer to?")
-        .type(ApplicationCommandOption.Type.USER.getValue())
-        .required(true)
-        .build()
-    ));
+    return Possible.of(
+        Collections.singletonList(
+            ApplicationCommandOptionData.builder()
+                .name("member")
+                .description("Who do you want give beer to?")
+                .type(ApplicationCommandOption.Type.USER.getValue())
+                .required(true)
+                .build()));
   }
 
   @Override
-  InteractionApplicationCommandCallbackReplyMono handleItem(ChatInputInteractionEvent event, Snowflake guildId, discord4j.core.object.entity.Member sender, Item item) {
+  InteractionApplicationCommandCallbackReplyMono handleItem(
+      ChatInputInteractionEvent event,
+      Snowflake guildId,
+      discord4j.core.object.entity.Member sender,
+      Item item) {
     log.debug("{} command received, sender={}, item={}", keyword(), sender.getUsername(), item);
-    if(event.getOptions().isEmpty( )) {
+    if (event.getOptions().isEmpty()) {
       return event.reply(getText("reply.++share", sender.getMention(), item.getEmoji()));
     }
-    User userMention = event.getOptions().iterator().next().getValue()
-      .map(ApplicationCommandInteractionOptionValue::asUser)
-      .map(Mono::block).orElseThrow(RuntimeException::new);
+    User userMention =
+        event
+            .getOptions()
+            .iterator()
+            .next()
+            .getValue()
+            .map(ApplicationCommandInteractionOptionValue::asUser)
+            .map(Mono::block)
+            .orElseThrow(RuntimeException::new);
     if (!item.isSelfIncrement()) {
       if (sender.getId().equals(userMention.getId())) {
         return event.reply(getText("reply.greedy", sender.getMention(), item.getEmoji()));
       }
     }
     if (userMention.isBot()) {
-      return event.reply(getText("reply.botslike", item.getEmoji(), ":beer:".equals(item.getEmoji()) ? ":wine_glass:" : ":beer:"));
+      return event.reply(
+          getText(
+              "reply.botslike",
+              item.getEmoji(),
+              ":beer:".equals(item.getEmoji()) ? ":wine_glass:" : ":beer:"));
     }
-    String toMembersString = guildInitializer.toMembersString(Collections.singletonList(userMention), guildId, item, MemberItem::incrementCount);
+    String toMembersString =
+        guildInitializer.toMembersString(
+            Collections.singletonList(userMention), guildId, item, MemberItem::incrementCount);
     return event.reply(getText("reply.++", sender.getMention(), item.getEmoji(), toMembersString));
   }
 }

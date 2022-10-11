@@ -3,14 +3,13 @@ package com.trumpetx.beer.domain;
 import com.j256.ormlite.dao.DaoManager;
 import com.j256.ormlite.dao.RuntimeExceptionDao;
 import com.j256.ormlite.support.ConnectionSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class MemberItemDaoImpl extends RuntimeExceptionDao<MemberItem, Long> {
   private static final Logger LOG = LoggerFactory.getLogger(MemberItemDaoImpl.class);

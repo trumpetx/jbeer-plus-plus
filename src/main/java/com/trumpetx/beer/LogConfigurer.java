@@ -1,16 +1,15 @@
 package com.trumpetx.beer;
 
+import static org.apache.commons.lang3.StringUtils.isNotBlank;
+
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.apache.commons.lang3.StringUtils.isNotBlank;
-
 class LogConfigurer {
   private static final String PROGRAM_LOGGER_NAME = "com.trumpetx.beer";
 
-  private LogConfigurer() {
-  }
+  private LogConfigurer() {}
 
   static void setLoggerLevel(String loggerName, String level) {
     if (isNotBlank(level)) {

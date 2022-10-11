@@ -33,18 +33,17 @@ public class Item {
   @DatabaseField(canBeNull = false)
   private boolean userDecrement;
 
-  public Item() {
-  }
+  public Item() {}
 
   public Item(
-    Server server,
-    String keyword,
-    String emoji,
-    String emojiPlural,
-    boolean selfIncrement,
-    boolean userIncrement,
-    boolean selfDecrement,
-    boolean userDecrement) {
+      Server server,
+      String keyword,
+      String emoji,
+      String emojiPlural,
+      boolean selfIncrement,
+      boolean userIncrement,
+      boolean selfDecrement,
+      boolean userDecrement) {
     this.server = server;
     this.keyword = keyword;
     this.emoji = emoji;
@@ -130,11 +129,11 @@ public class Item {
   @Override
   public String toString() {
     return new ToStringBuilder(this)
-      .append("id", id)
-      .append("server", server)
-      .append("keyword", keyword)
-      .append("emoji", emoji)
-      .append("emojiPlural", emojiPlural)
-      .toString();
+        .append("id", id)
+        .append("server", server)
+        .append("keyword", keyword)
+        .append("emoji", emoji)
+        .append("emojiPlural", emojiPlural)
+        .toString();
   }
 }
