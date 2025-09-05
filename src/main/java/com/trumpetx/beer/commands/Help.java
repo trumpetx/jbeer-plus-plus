@@ -5,6 +5,7 @@ import com.trumpetx.beer.domain.Item;
 import discord4j.common.util.Snowflake;
 import discord4j.core.event.domain.interaction.ChatInputInteractionEvent;
 import discord4j.core.spec.InteractionApplicationCommandCallbackReplyMono;
+import reactor.core.publisher.Mono;
 
 public class Help extends AbstractCommand {
   Help(DaoProvider daoProvider) {
@@ -12,20 +13,21 @@ public class Help extends AbstractCommand {
   }
 
   @Override
-  InteractionApplicationCommandCallbackReplyMono handleItem(
+  Mono<InteractionApplicationCommandCallbackReplyMono> handleItem(
       ChatInputInteractionEvent event,
       Snowflake guildId,
       discord4j.core.object.entity.Member sender,
       Item item) {
-    return event.reply(
-        "How to Beer-Plus-Plus:```"
-            + "/beerplusplus @Someone\n"
-            + "/beerminusminus @Someone\n"
-            + "/beercount\n"
-            + "/beerpercent\n"
-            + "/beerabout\n"
-            + "```\n"
-            + "Beer++ has been rewritten with slash commands!!  Some behaviors have changed, but the gist should remain the same.  Enjoy :beers:!\n"
-            + "Feedback: <https://discordbots.org/bot/405811389748346881>");
+    return Mono.just(
+        event.reply(
+            "How to Beer-Plus-Plus:```"
+                + "/beerplusplus @Someone\n"
+                + "/beerminusminus @Someone\n"
+                + "/beercount\n"
+                + "/beerpercent\n"
+                + "/beerabout\n"
+                + "```\n"
+                + "Beer++ has been rewritten with slash commands!!  Some behaviors have changed, but the gist should remain the same.  Enjoy :beers:!\n"
+                + "Feedback: <https://discordbots.org/bot/405811389748346881>"));
   }
 }

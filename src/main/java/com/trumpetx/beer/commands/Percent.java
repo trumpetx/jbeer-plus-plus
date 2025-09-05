@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
+import reactor.core.publisher.Mono;
 
 class Percent extends AbstractCommand {
   Percent(DaoProvider daoProvider) {
@@ -20,19 +21,31 @@ class Percent extends AbstractCommand {
   }
 
   @Override
-  InteractionApplicationCommandCallbackReplyMono handleItem(
+  Mono<InteractionApplicationCommandCallbackReplyMono> handleItem(
       ChatInputInteractionEvent event,
       Snowflake guildId,
       discord4j.core.object.entity.Member sender,
       Item item) {
-    Guild guild = sender.getGuild().block(Duration.ofSeconds(10));
-    if (guild == null) {
-      log.error("Error {}.getGuild()", getClass().getSimpleName());
-      return event.reply();
-    }
+    return sender
+        .getGuild()
+        .timeout(Duration.ofSeconds(10))
+        .flatMap(
+            guild -> {
+              return processPercentCommand(event, guild, item);
+            })
+        .switchIfEmpty(Mono.just(event.reply("Error: Guild not found")))
+        .onErrorResume(
+            throwable -> {
+              log.error("Error {}.getGuild()", getClass().getSimpleName(), throwable);
+              return Mono.just(event.reply("Error: Failed to get guild information"));
+            });
+  }
+
+  private Mono<InteractionApplicationCommandCallbackReplyMono> processPercentCommand(
+      ChatInputInteractionEvent event, Guild guild, Item item) {
     List<MemberItem> memberItems = daoProvider.memberItemDao.queryForByItem(item);
     if (memberItems.isEmpty()) {
-      return event.reply(getText("reply.none", item.getEmojiPlural()));
+      return Mono.just(event.reply(getText("reply.none", item.getEmojiPlural())));
     }
     StringBuilder sb = new StringBuilder();
     AtomicLong total = new AtomicLong();
@@ -54,7 +67,7 @@ class Percent extends AbstractCommand {
     if (reply.length() > 2000) {
       reply = reply.substring(0, 1900) + "\n\nReply too long, truncating (will fix this later).";
     }
-    return event.reply(reply);
+    return Mono.just(event.reply(reply));
   }
 
   private String getPercentString(MemberItem memberItem, long total) {

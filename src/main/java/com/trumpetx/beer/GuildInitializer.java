@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 public class GuildInitializer implements Function<Guild, Flux<?>> {
   private static final Logger LOG = LoggerFactory.getLogger(GuildInitializer.class);
@@ -63,26 +64,31 @@ public class GuildInitializer implements Function<Guild, Flux<?>> {
             });
   }
 
-  public String toMembersString(
+  public Mono<String> toMembersString(
       List<User> userMentions,
       Snowflake guildId,
       Item item,
       Function<MemberItem, MemberItem> modifyItem) {
-    AtomicLong count = new AtomicLong();
-    String toMembersString =
-        userMentions.stream()
-            .map(user -> user.asMember(guildId).block())
-            .filter(Objects::nonNull)
-            .peek(
-                member -> {
-                  MemberItem memberItem =
-                      getOrCreateMemberItem(member, item, item.getServer().getName());
-                  daoProvider.memberItemDao.update(modifyItem.apply(memberItem));
-                  count.set(memberItem.getCount());
-                })
-            .map(discord4j.core.object.entity.Member::getMention)
-            .collect(Collectors.joining(", "));
-    String optionalCount = userMentions.size() == 1 ? (" [ " + count.get() + " ]") : "";
-    return toMembersString + optionalCount;
+    return Flux.fromIterable(userMentions)
+        .flatMap(user -> user.asMember(guildId))
+        .filter(Objects::nonNull)
+        .collectList()
+        .map(
+            members -> {
+              AtomicLong count = new AtomicLong();
+              String toMembersString =
+                  members.stream()
+                      .peek(
+                          member -> {
+                            MemberItem memberItem =
+                                getOrCreateMemberItem(member, item, item.getServer().getName());
+                            daoProvider.memberItemDao.update(modifyItem.apply(memberItem));
+                            count.set(memberItem.getCount());
+                          })
+                      .map(discord4j.core.object.entity.Member::getMention)
+                      .collect(Collectors.joining(", "));
+              String optionalCount = userMentions.size() == 1 ? (" [ " + count.get() + " ]") : "";
+              return toMembersString + optionalCount;
+            });
   }
 }

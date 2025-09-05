@@ -10,7 +10,6 @@ import discord4j.common.util.Snowflake;
 import discord4j.core.event.domain.interaction.ChatInputInteractionEvent;
 import discord4j.core.object.command.ApplicationCommandInteractionOptionValue;
 import discord4j.core.object.command.ApplicationCommandOption;
-import discord4j.core.object.entity.User;
 import discord4j.core.spec.InteractionApplicationCommandCallbackReplyMono;
 import discord4j.discordjson.json.ApplicationCommandOptionData;
 import discord4j.discordjson.possible.Possible;
@@ -39,39 +38,55 @@ class PlusPlus extends AbstractCommand {
   }
 
   @Override
-  InteractionApplicationCommandCallbackReplyMono handleItem(
+  Mono<InteractionApplicationCommandCallbackReplyMono> handleItem(
       ChatInputInteractionEvent event,
       Snowflake guildId,
       discord4j.core.object.entity.Member sender,
       Item item) {
     log.debug("{} command received, sender={}, item={}", keyword(), sender.getUsername(), item);
     if (event.getOptions().isEmpty()) {
-      return event.reply(getText("reply.++share", sender.getMention(), item.getEmoji()));
+      return Mono.just(event.reply(getText("reply.++share", sender.getMention(), item.getEmoji())));
     }
-    User userMention =
-        event
-            .getOptions()
-            .iterator()
-            .next()
-            .getValue()
-            .map(ApplicationCommandInteractionOptionValue::asUser)
-            .map(Mono::block)
-            .orElseThrow(RuntimeException::new);
-    if (!item.isSelfIncrement()) {
-      if (sender.getId().equals(userMention.getId())) {
-        return event.reply(getText("reply.greedy", sender.getMention(), item.getEmoji()));
-      }
-    }
-    if (userMention.isBot()) {
-      return event.reply(
-          getText(
-              "reply.botslike",
-              item.getEmoji(),
-              ":beer:".equals(item.getEmoji()) ? ":wine_glass:" : ":beer:"));
-    }
-    String toMembersString =
-        guildInitializer.toMembersString(
-            Collections.singletonList(userMention), guildId, item, MemberItem::incrementCount);
-    return event.reply(getText("reply.++", sender.getMention(), item.getEmoji(), toMembersString));
+    return event
+        .getOptions()
+        .iterator()
+        .next()
+        .getValue()
+        .map(ApplicationCommandInteractionOptionValue::asUser)
+        .orElse(Mono.empty())
+        .flatMap(
+            userMention -> {
+              if (!item.isSelfIncrement()) {
+                if (sender.getId().equals(userMention.getId())) {
+                  return Mono.just(
+                      event.reply(getText("reply.greedy", sender.getMention(), item.getEmoji())));
+                }
+              }
+              if (userMention.isBot()) {
+                return Mono.just(
+                    event.reply(
+                        getText(
+                            "reply.botslike",
+                            item.getEmoji(),
+                            ":beer:".equals(item.getEmoji()) ? ":wine_glass:" : ":beer:")));
+              }
+
+              return guildInitializer
+                  .toMembersString(
+                      Collections.singletonList(userMention),
+                      guildId,
+                      item,
+                      MemberItem::incrementCount)
+                  .map(
+                      toMembersString ->
+                          event.reply(
+                              getText(
+                                  "reply.++",
+                                  sender.getMention(),
+                                  item.getEmoji(),
+                                  toMembersString)))
+                  .switchIfEmpty(Mono.just(event.reply("Error processing member")));
+            })
+        .switchIfEmpty(Mono.just(event.reply("Invalid user specified")));
   }
 }

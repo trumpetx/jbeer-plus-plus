@@ -18,7 +18,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Properties;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -33,20 +32,18 @@ public class DiscordApp implements Runnable {
   private static Logger LOG;
   private final Map<String, Command> commands;
   private final GuildInitializer guildInitializer;
-  private final GatewayDiscordClient gateway;
+  private GatewayDiscordClient gateway;
+  private final String token;
 
   private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 
   public DiscordApp(String token, DaoProvider daoProvider) {
-    gateway =
-        DiscordClient.create(token)
-            .gateway()
-            .setInitialPresence(s -> ClientPresence.invisible())
-            .login()
-            .block();
-    Objects.requireNonNull(gateway, "The DiscordClientGateway could not login.");
+    // Initialize non-blocking components first
     guildInitializer = new GuildInitializer(daoProvider);
     commands = new CommandFactory(daoProvider, guildInitializer).getCommands();
+
+    // Store token for later use in run() method
+    this.token = token;
   }
 
   public static void main(String[] args) {
@@ -91,13 +88,48 @@ public class DiscordApp implements Runnable {
 
   @Override
   public void run() {
-    executor.scheduleWithFixedDelay(new StatusUpdater(gateway), 10, 900, TimeUnit.SECONDS);
+    // Create gateway connection reactively
+    DiscordClient.create(token)
+        .gateway()
+        .setInitialPresence(s -> ClientPresence.invisible())
+        .login()
+        .doOnNext(
+            gateway -> {
+              this.gateway = gateway;
+              LOG.info("Discord gateway connected successfully");
+            })
+        .doOnError(
+            error -> {
+              LOG.error("Failed to connect to Discord gateway", error);
+              System.exit(1);
+            })
+        .flatMapMany(
+            gateway -> {
+              // Setup all event handlers and scheduled tasks
+              setupEventHandlers(gateway);
+              setupScheduledTasks(gateway);
+              setupApplicationCommands(gateway);
+
+              // Return the disconnect stream to keep the application running
+              return gateway.onDisconnect();
+            })
+        .doOnNext(disconnect -> LOG.info("Discord gateway disconnected"))
+        .doOnError(error -> LOG.error("Error in Discord gateway", error))
+        .subscribe();
+  }
+
+  private void setupEventHandlers(GatewayDiscordClient gateway) {
+    // Initialize existing guilds
     gateway.getGuilds().flatMap(guildInitializer).subscribe();
+
+    // Handle guild creation
     gateway
         .on(GuildCreateEvent.class)
         .map(GuildCreateEvent::getGuild)
         .flatMap(guildInitializer::apply)
         .subscribe();
+
+    // Handle guild deletion
     gateway
         .on(GuildDeleteEvent.class)
         .map(GuildDeleteEvent::getGuild)
@@ -107,6 +139,8 @@ public class DiscordApp implements Runnable {
               return Mono.empty();
             })
         .subscribe();
+
+    // Handle slash commands
     gateway
         .getEventDispatcher()
         .on(
@@ -126,11 +160,19 @@ public class DiscordApp implements Runnable {
             })
         .onErrorResume(
             e -> {
-              LOG.error("Unexpected error doing something: {}", e.getMessage());
+              LOG.error("Unexpected error processing command: {}", e.getMessage());
               return Mono.empty();
             })
         .subscribe();
+  }
+
+  private void setupScheduledTasks(GatewayDiscordClient gateway) {
+    executor.scheduleWithFixedDelay(new StatusUpdater(gateway), 10, 900, TimeUnit.SECONDS);
+  }
+
+  private void setupApplicationCommands(GatewayDiscordClient gateway) {
     gateway.getApplicationInfo().subscribe(info -> LOG.info("Started: {}", info.getName()));
+
     gateway
         .getRestClient()
         .getApplicationId()
@@ -153,6 +195,5 @@ public class DiscordApp implements Runnable {
                             .collect(Collectors.toList()))
                     .onErrorStop()
                     .subscribe());
-    gateway.onDisconnect().block();
   }
 }

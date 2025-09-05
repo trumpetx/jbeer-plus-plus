@@ -11,6 +11,7 @@ import discord4j.core.object.entity.Guild;
 import discord4j.core.spec.InteractionApplicationCommandCallbackReplyMono;
 import java.util.Comparator;
 import java.util.List;
+import reactor.core.publisher.Mono;
 
 class Count extends AbstractCommand {
   Count(DaoProvider daoProvider) {
@@ -18,19 +19,25 @@ class Count extends AbstractCommand {
   }
 
   @Override
-  InteractionApplicationCommandCallbackReplyMono handleItem(
+  Mono<InteractionApplicationCommandCallbackReplyMono> handleItem(
       ChatInputInteractionEvent event,
       Snowflake guildId,
       discord4j.core.object.entity.Member sender,
       Item item) {
-    Guild guild = sender.getGuild().block();
-    if (guild == null) {
-      log.error("Error {}.getGuild()", getClass().getSimpleName());
-      return event.reply();
-    }
+    return sender
+        .getGuild()
+        .flatMap(
+            guild -> {
+              return processCountCommand(event, guild, item);
+            })
+        .switchIfEmpty(Mono.just(event.reply("Error: Guild not found")));
+  }
+
+  private Mono<InteractionApplicationCommandCallbackReplyMono> processCountCommand(
+      ChatInputInteractionEvent event, Guild guild, Item item) {
     List<MemberItem> memberItems = daoProvider.memberItemDao.queryForByItem(item);
     if (memberItems.isEmpty()) {
-      return event.reply(getText("reply.none", item.getEmojiPlural()));
+      return Mono.just(event.reply(getText("reply.none", item.getEmojiPlural())));
     }
     StringBuilder sb = new StringBuilder();
     long topX =
@@ -52,7 +59,7 @@ class Count extends AbstractCommand {
           reply.substring(0, 1900)
               + "\n\nReply too long, truncating for now (will fix this later).";
     }
-    return event.reply(reply);
+    return Mono.just(event.reply(reply));
   }
 
   private String getCountString(MemberItem memberItem) {
