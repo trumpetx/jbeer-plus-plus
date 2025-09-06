@@ -6,3 +6,4 @@ target/
 *.log
 *.db
 dependency-reduced-pom.xml
+.vscode/
