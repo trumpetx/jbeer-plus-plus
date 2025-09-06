@@ -115,7 +115,7 @@ public class DiscordApp implements Runnable {
             })
         .doOnNext(disconnect -> LOG.info("Discord gateway disconnected"))
         .doOnError(error -> LOG.error("Error in Discord gateway", error))
-        .subscribe();
+        .blockLast(); // Block the main thread to keep the application running
   }
 
   private void setupEventHandlers(GatewayDiscordClient gateway) {
@@ -156,7 +156,9 @@ public class DiscordApp implements Runnable {
                     .reply("The command " + event.getCommandName() + " is invalid")
                     .withEphemeral(true);
               }
-              return command.execute(event);
+              return command
+                  .execute(event)
+                  .flatMap(mono -> mono); // Flatten the Mono<Mono<Reply>> to Mono<Reply>
             })
         .onErrorResume(
             e -> {

@@ -119,11 +119,7 @@ class CountTest {
     memberItem2.setCount(5L);
     daoProvider.memberItemDao.create(memberItem2);
 
-    // Setup guild members (Discord4J Member type)
-    when(guild.getMemberById(Snowflake.of(10L))).thenReturn(Mono.just(discordMember1));
-    when(guild.getMemberById(Snowflake.of(20L))).thenReturn(Mono.just(discordMember2));
-    when(discordMember1.getDisplayName()).thenReturn("User1");
-    when(discordMember2.getDisplayName()).thenReturn("User2");
+    // No need to mock guild member lookups since we're using mentions directly
 
     // When
     Mono<InteractionApplicationCommandCallbackReplyMono> result =
@@ -133,8 +129,8 @@ class CountTest {
     StepVerifier.create(result)
         .assertNext(
             reply -> {
-              verify(event).reply(contains("User1"));
-              verify(event).reply(contains("User2"));
+              verify(event).reply(contains("<@!10>"));
+              verify(event).reply(contains("<@!20>"));
               verify(event).reply(contains("10"));
               verify(event).reply(contains("5"));
             })
@@ -203,9 +199,7 @@ class CountTest {
     memberItem1.setCount(5L);
     daoProvider.memberItemDao.create(memberItem1);
 
-    // Guild member lookup fails
-    when(guild.getMemberById(Snowflake.of(30L)))
-        .thenReturn(Mono.error(new RuntimeException("Member not found")));
+    // No need to mock guild member lookup since we're using mentions directly
 
     // When
     Mono<InteractionApplicationCommandCallbackReplyMono> result =

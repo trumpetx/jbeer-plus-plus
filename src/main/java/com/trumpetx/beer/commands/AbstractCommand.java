@@ -1,6 +1,5 @@
 package com.trumpetx.beer.commands;
 
-import com.j256.ormlite.dao.ForeignCollection;
 import com.trumpetx.beer.domain.DaoProvider;
 import com.trumpetx.beer.domain.Item;
 import com.trumpetx.beer.domain.MemberItem;
@@ -9,7 +8,6 @@ import discord4j.common.util.Snowflake;
 import discord4j.core.event.domain.interaction.ChatInputInteractionEvent;
 import discord4j.core.object.entity.Guild;
 import discord4j.core.spec.InteractionApplicationCommandCallbackReplyMono;
-import discord4j.rest.http.client.ClientException;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,36 +42,36 @@ abstract class AbstractCommand implements Command {
       Item item);
 
   @Override
-  public InteractionApplicationCommandCallbackReplyMono execute(ChatInputInteractionEvent event) {
+  public Mono<InteractionApplicationCommandCallbackReplyMono> execute(
+      ChatInputInteractionEvent event) {
     Optional<Snowflake> guildId = event.getInteraction().getGuildId();
     Optional<discord4j.core.object.entity.Member> sender = event.getInteraction().getMember();
     String onlyBeerIsSupportedForNow = "beer";
 
-    if (sender.isEmpty() || guildId.isEmpty()) {
-      return invalid(event);
+    if (!sender.isPresent() || !guildId.isPresent()) {
+      return Mono.just(invalid(event));
     }
 
-    return guildId
-        .map(Snowflake::asLong)
-        .map(daoProvider.serverDao::queryForId)
-        .map(Server::getItems)
-        .map(ForeignCollection::stream)
-        .flatMap(
-            itemStream ->
-                itemStream
-                    .filter(i -> i.getKeyword().equals(onlyBeerIsSupportedForNow))
-                    .findFirst())
-        .map(
-            item -> {
-              log.debug(
-                  "{} command received, sender={}, item={}",
-                  keyword(),
-                  sender.get().getUsername(),
-                  item);
-              return handleItem(event, guildId.get(), sender.get(), item);
-            })
-        .orElseGet(() -> Mono.just(invalid(event)))
-        .block();
+    // Find the beer item
+    Server server = daoProvider.serverDao.queryForId(guildId.get().asLong());
+    if (server == null) {
+      return Mono.just(invalid(event));
+    }
+
+    Item beerItem =
+        server.getItems().stream()
+            .filter(i -> i.getKeyword().equals(onlyBeerIsSupportedForNow))
+            .findFirst()
+            .orElse(null);
+
+    if (beerItem == null) {
+      return Mono.just(invalid(event));
+    }
+
+    log.debug(
+        "{} command received, sender={}, item={}", keyword(), sender.get().getUsername(), beerItem);
+
+    return handleItem(event, guildId.get(), sender.get(), beerItem);
   }
 
   private InteractionApplicationCommandCallbackReplyMono invalid(ChatInputInteractionEvent event) {
@@ -82,29 +80,9 @@ abstract class AbstractCommand implements Command {
         .withEphemeral(true);
   }
 
-  String displayNameOrMention(Guild guild, MemberItem memberItem) {
-    try {
-      return guild
-          .getMemberById(Snowflake.of(memberItem.getMember().getId()))
-          .map(discord4j.core.object.entity.Member::getDisplayName)
-          .onErrorResume(
-              ClientException.class,
-              e -> {
-                log.debug(
-                    "Error looking up {}/{} : {}",
-                    guild.getName(),
-                    memberItem.getMember().getId(),
-                    e.getMessage());
-                return Mono.just(memberItem.getMember().toMention());
-              })
-          .block();
-    } catch (Exception e) {
-      log.debug(
-          "Error looking up {}/{} : {}",
-          guild.getName(),
-          memberItem.getMember().getId(),
-          e.getMessage());
-      return memberItem.getMember().toMention();
-    }
+  Mono<String> displayNameOrMention(Guild guild, MemberItem memberItem) {
+    // Use mention directly instead of making API calls to get display name
+    // This is much faster and avoids Discord API rate limits and timeouts
+    return Mono.just(memberItem.getMember().toMention());
   }
 }

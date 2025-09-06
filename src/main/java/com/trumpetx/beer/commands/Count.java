@@ -11,6 +11,7 @@ import discord4j.core.object.entity.Guild;
 import discord4j.core.spec.InteractionApplicationCommandCallbackReplyMono;
 import java.util.Comparator;
 import java.util.List;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 class Count extends AbstractCommand {
@@ -39,27 +40,33 @@ class Count extends AbstractCommand {
     if (memberItems.isEmpty()) {
       return Mono.just(event.reply(getText("reply.none", item.getEmojiPlural())));
     }
-    StringBuilder sb = new StringBuilder();
-    long topX =
-        memberItems.stream()
-            .filter(i -> i.getCount() > 0)
-            .sorted(Comparator.comparing(MemberItem::getCount).reversed())
-            .limit(20)
-            .peek(
-                memberItem ->
-                    sb.append(
-                        getText(
-                            "top.member",
-                            displayNameOrMention(guild, memberItem),
-                            getCountString(memberItem))))
-            .count();
-    String reply = getText("top.header", topX, item.getEmojiPlural(), guild.getName()) + sb;
-    if (reply.length() > 2000) {
-      reply =
-          reply.substring(0, 1900)
-              + "\n\nReply too long, truncating for now (will fix this later).";
-    }
-    return Mono.just(event.reply(reply));
+
+    // Process member items reactively
+    return Flux.fromIterable(memberItems)
+        .filter(i -> i.getCount() > 0)
+        .sort(Comparator.comparing(MemberItem::getCount).reversed())
+        .take(20)
+        .flatMap(
+            memberItem ->
+                displayNameOrMention(guild, memberItem)
+                    .map(
+                        displayName ->
+                            getText("top.member", displayName, getCountString(memberItem))))
+        .collectList()
+        .map(
+            memberStrings -> {
+              StringBuilder sb = new StringBuilder();
+              memberStrings.forEach(sb::append);
+              long topX = memberStrings.size();
+              String reply =
+                  getText("top.header", topX, item.getEmojiPlural(), guild.getName()) + sb;
+              if (reply.length() > 2000) {
+                reply =
+                    reply.substring(0, 1900)
+                        + "\n\nReply too long, truncating for now (will fix this later).";
+              }
+              return event.reply(reply);
+            });
   }
 
   private String getCountString(MemberItem memberItem) {
